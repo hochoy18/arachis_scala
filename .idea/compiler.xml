@@ -25,7 +25,7 @@
         <module name="my_scala_code" />
       </profile>
     </annotationProcessing>
-    <bytecodeTargetLevel>
+    <bytecodeTargetLevel target="1.7">
       <module name="my_scala_code" target="1.5" />
     </bytecodeTargetLevel>
   </component>
