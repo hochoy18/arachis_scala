@@ -4,6 +4,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
 
+
 /**
  * Created by arachis on 2016/11/21.
  * spark 实现基于物品的协同过滤
