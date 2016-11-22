@@ -190,7 +190,7 @@ object ItemBaseCF extends Serializable {
 
     //predict item rating
     // 冷启动，如果用户没有评分，默认是平均值
-    loadTestData(sc,test_path).map(t2 => (t2,2.5) ).fullOuterJoin(predict_.map(t2 => ( (t2._1,t2._2._1),t2._2._2) )).map(t2 =>{
+    loadTestData(sc,test_path).map(t2 => (t2,2.5) ).fullOuterJoin(predict_.map(t2 => ( (t2._1,t2._2._1),1.0 * (t2._2._2 * 10000).toInt / 10000) )).map(t2 =>{
       var res = 2.5
       if(t2._2._2 != None){
         res = t2._2._2.get
@@ -199,7 +199,7 @@ object ItemBaseCF extends Serializable {
     }).repartition(1).saveAsTextFile(predict_path)
 
     //recommend to user top n
-    val recommend = recommend(predict_,10)
+    val recommend_ = recommend(predict_,10)
   }
 
 }
