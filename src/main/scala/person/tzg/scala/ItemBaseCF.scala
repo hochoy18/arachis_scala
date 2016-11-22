@@ -80,25 +80,65 @@ object ItemBaseCF extends Serializable {
     })
   }
 
+  /**
+   * 预测用户对物品的评分
+   * @param item_similarity 物品相似度
+   * @param user_rating 用户评分数据
+   * @return (user,(item_j,predict) )
+   */
+  def predict(item_similarity:RDD[(String, String, Double)],user_rating:RDD[(String, String, Double)]):RDD[(String, (String, Double))] = {
+    //矩阵计算——i行与j列元素相乘
+    val rdd_1 = item_similarity.map(t3 => (t3._2, (t3._1, t3._3))).join(user_rating.map(t3 => (t3._2, (t3._1, t3._3)))).map(t2 => {
+
+      val itemi = t2._2._1._1
+      val user = t2._2._2._1
+      val weight = t2._2._2._2 * t2._2._1._2
+      ((user, itemi), weight)
+    })
+    //矩阵计算——用户：元素累加求和
+    val rdd_sum = rdd_1.reduceByKey(((v1,v2)=>v1+v2)).map(t2 => {
+
+      val user = t2._1._1
+      val item_j = t2._1._2
+      val predict = t2._2
+      (user,(item_j,predict) )
+    })
+    rdd_sum
+  }
+
+  /**
+   * 为用户推荐item
+   * @param item_predict 物品预测评分
+   * @param r_number 推荐物品个数
+   * @return （user,item,predict）
+   */
+  def recommend(item_predict:RDD[(String, (String, Double))],r_number:Int):RDD[(String, String, Double)] = {
+
+    //矩阵计算——用户：用户对结果排序，过滤
+    item_predict.groupByKey.map(f => {
+      val i2 = f._2.toBuffer
+      val i2_2 = i2.sortBy(_._2)
+      if (i2_2.length > r_number)i2_2.remove(0,(i2_2.length-r_number))
+      (f._1,i2_2.toIterable)
+    }).flatMap(f=> {
+      val id2 = f._2
+      for (w <-id2) yield (f._1,w._1,w._2)
+
+    })
+  }
+
   def main(args: Array[String]) {
-    //to for restart fail app
-    //sc.setCheckpointDir("/tmp/checkpointdir/")
 
     //parse to user,item,rating 3tuple
     val ratings: RDD[(String, String, Double)] = loadDate(sc)
 
     //convert to user-item matrix
     val user_item: RDD[(String, String)] = ratings.map(t3 => (t3._1, t3._2)).sortByKey()
-    //user_item.checkpoint() //Done checkpointing RDD 7 to hdfs://BGP-LF-1RE1222:8020/tmp/checkpointdir/cc64b877-42ca-41a4-b0af-64b9130a4baf/rdd-7
-    //user_item.count() //rdd.cache >> rdd.checkpoint
     user_item.cache()
     user_item.count()
 
     //calculate the cooccurence matrix of item
     val cooccurence_matrix: RDD[((String, String), Int)] = calculateCoccurenceMatrix(user_item)
-    //sc.setCheckpointDir("/tmp/checkpointdir/cooccurence_matrix")
-    //cooccurence_matrix.checkpoint()
-
 
     val same_item_matrix: RDD[((String, String), Int)] = cooccurence_matrix.filter(t2 => {
       t2._1._1 == t2._1._1
@@ -127,10 +167,12 @@ object ItemBaseCF extends Serializable {
     })
 
     val rdd_cosine_s: RDD[(String, String, Double)] = similarity("cosine_s", rdd_left, rdd_right)
-    sc.setCheckpointDir("/tmp/checkpointdir/rdd_cosine_s")
-    rdd_cosine_s.checkpoint()
+
+    //predict item rating
+    val predict = predict(rdd_cosine_s ,ratings)
+
+    //recommend to user top n
+    val recommend = recommend(predict,10)
   }
-
-
 
 }
