@@ -214,8 +214,14 @@ object ItemBaseCF extends Serializable {
 
     //predict item rating
     // 冷启动，如果用户没有评分，默认是平均值
-    loadTestData(sc, test_path).map(t2 => (t2, 2.5)).fullOuterJoin(predict_.map(t2 => ((t2._1, t2._2._1), t2._2._2))).map(t2 => {
-      var res = 2.5
+    /** ratings.map(t3 =>(t3._3,1)).countByKey()
+     * res19: scala.collection.Map[Double,Long] = Map(5.0 -> 6350163, 1.0 -> 1724390, 2.0 -> 3974256, 3.0 -> 9973821, 4.0 -> 11154640)
+
+      scala> (5.0 * 6350163 + 1.0 * 1724390 + 2.0 * 3974256 + 3.0 * 9973821 + 4.0 * 11154640 ) / (6350163+1724390+3974256+9973821+11154640)
+      res21: Double = 3.495276736150985
+     */
+    loadTestData(sc, test_path).map(t2 => (t2, 2.5)).leftOuterJoin(predict_.map(t2 => ((t2._1, t2._2._1), t2._2._2))).map(t2 => {
+      var res = 3.4952
       if(t2._2._2 != None){
         res = t2._2._2.get
       }
