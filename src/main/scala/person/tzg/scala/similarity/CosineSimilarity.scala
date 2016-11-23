@@ -29,9 +29,7 @@ class CosineSimilarity extends Similarity{
       (user, (item, rating))
     })
 
-
     //user key join user key
-    //
     val sim = user_row.join(user_row).map(t2 => {
       val item1 = t2._2._1._1
       val item2 = t2._2._2._1
@@ -50,8 +48,12 @@ class CosineSimilarity extends Similarity{
       val sum_jj = t2._2._2
       val sum_ii = t2._2._1
       val cosine = sum_ij / math.sqrt(sum_ii * sum_jj)
-      (t2._1._1,t2._1._2, cosine)
+      (t2._1._1,t2._1._2, 1.0 * (cosine * 10000).toInt / 10000)
     })
-    sim
+    //矩阵反转，没有相同物品的相似度
+    val union = sim.map(t3 => {
+      (t3._1._2, t._1._1, t._1._3)
+    }).union(sim)
+    union
   }
 }

@@ -10,7 +10,7 @@ import scala.collection.mutable.ArrayBuffer
  * 相似度计算方法：计算两个商品共同出现的次数和各个商品出现次数的平方根的比值
  * 值越大，相似度越大
  *
- * 注：假定已经对数据做了标准化
+ * 注：数据相似度矩阵要做标准化
  */
 class CooccurenceSimilarity extends Similarity {
 
