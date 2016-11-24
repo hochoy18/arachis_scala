@@ -22,6 +22,7 @@ object CosineSimilarity extends Similarity {
     if( !"cosine".equals(sim_type) ){
       return null
     }
+
     val user_row = ratings.map(t3 => {
       val user = t3._1
       val item = t3._2
