@@ -1,11 +1,12 @@
 package person.tzg.scala
 
 
-import scala.collection.mutable.{ArrayBuffer}
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.SparkContext._
+
 import org.apache.spark.rdd.RDD
-import utils.VaildLogUtils
+import org.apache.spark.{SparkConf, SparkContext}
+import person.tzg.scala.common.CommonUtil
+import person.tzg.scala.similarity.CosineSimilarity
+
 /**
  * Created by arachis on 2016/11/21.
  * spark 实现基于物品的协同过滤
@@ -19,116 +20,6 @@ object ItemBaseCF extends Serializable {
   val test_path = "/tmp/test.csv"
   val predict_path = "/user/tongzhenguo/recommend/cosine_s_predict"
   val split: String = ","
-
-  /**
-   * 加载训练集
-   * @param sc
-   */
-  def loadTrainData(sc: SparkContext,path:String): RDD[(String, String, Double)] = {
-    //parse to user,item,rating 3tuple
-    val ratings = sc.textFile(path, 200).filter(l => {
-      val fileds = l.split(split)
-      fileds.length >=3 && VaildLogUtils.isNumeric(fileds(0)) && VaildLogUtils.isNumeric(fileds(1)) && VaildLogUtils.isNumeric(fileds(2))
-    })
-      .map(line => {
-        val fileds = line.split(split)
-
-        (fileds(0), fileds(1), fileds(2).toDouble)
-      })
-    ratings
-  }
-
-  /**
-   * 加载测试集
-   * @param sc
-   */
-  def loadTestData(sc: SparkContext,path:String): RDD[(String, String)] = {
-    //parse to user,item 3tuple
-    val ratings = sc.textFile(path, 200).filter(l => {
-      val fileds = l.split(split)
-      fileds.length >=2 && VaildLogUtils.isNumeric(fileds(0)) && VaildLogUtils.isNumeric(fileds(1))
-    })
-      .map(line => {
-        val fileds = line.split(split)
-
-        (fileds(0), fileds(1))
-      })
-    ratings
-  }
-
-  /**
-   * 计算物品共现矩阵
-   * @param user_item 用户-物品评分矩阵
-   * @return ((item1,item2),freq)
-   */
-  def calculateCoccurenceMatrix(user_item: RDD[(String, String)]): RDD[((String, String), Int)] = {
-
-    val cooccurence_matrix = user_item.reduceByKey((item1,item2) => item1+"-"+item2 ).flatMap[((String, String), Int)](t2 => {
-      val items = t2._2.split("-")
-      var list = ArrayBuffer[((String, String), Int)]()
-      for(i <- 0 to items.length-1){
-        for(j <-i to items.length-1){
-          if(items(i) != items(j)){
-            val tuple = ( (items(j),items(i)), 1)
-            list += tuple
-          }
-          val tuple2 = ( (items(i),items(j)), 1 )
-          list += tuple2
-        }
-      }
-      list
-    }).reduceByKey((v1, v2) => v1 + v2)
-    cooccurence_matrix
-  }
-
-  /**
-   * 计算物品的相似度算法
-   * @param sim_type 相似度计算方法
-   * @return 物品i和物品j的相似度
-   */
-  def similarity(sim_type: String = "cosine_s",ratings: RDD[(String, String, Double)]): RDD[(String, String, Double)] = {
-
-    //convert to user-item matrix
-    val user_item: RDD[(String, String)] = ratings.map(t3 => (t3._1, t3._2)).sortByKey()
-    user_item.cache()
-    user_item.count()
-
-    //calculate the cooccurence matrix of item
-    val cooccurence_matrix: RDD[((String, String), Int)] = calculateCoccurenceMatrix(user_item)
-    //cooccurence_matrix.saveAsTextFile("/user/tongzhenguo/recommend/cooccurence_matrix")
-
-    val same_item_matrix: RDD[((String, String), Int)] = cooccurence_matrix.filter(t2 => {
-      t2._1._1 == t2._1._2
-    })
-
-    val common_item_matrix: RDD[((String, String), Int)] = cooccurence_matrix.filter(t2 => {
-      t2._1._1 != t2._1._2
-    })
-
-    //calculate the similarity of between item1 and item2
-    val rdd_right: RDD[(String, Int)] = same_item_matrix.map(t2 => {
-
-      val item: String = t2._1._1
-      val n: Int = t2._2
-      (item, n)//item,count
-    })
-
-    val rdd_left: RDD[(String, (String, String, Int,Int))] = common_item_matrix.map(t2 => {
-      (t2._1._1, (t2._1._1, t2._1._2, t2._2)) //item1,item2,count
-    }).join(rdd_right).map(t2 =>{ //item1,item2,f12,f2
-      (t2._2._1._2,(t2._2._1._1,t2._2._1._2,t2._2._1._3,t2._2._2))
-    })
-
-     rdd_left.join(rdd_right).map(t2 => {
-      val item_i = t2._2._1._1
-      val item_j = t2._2._1._2
-      val nij = t2._2._1._3
-      val ni = t2._2._1._4
-      val nj = t2._2._2
-
-       (item_i, item_j, (1.0 * (10000 * nij / math.sqrt(ni * nj)).toInt / 10000)) //cosine_s
-    })
-  }
 
     /**
      * 预测用户对物品的评分
@@ -225,8 +116,8 @@ object ItemBaseCF extends Serializable {
     }).groupByKey().map(f => {
       val i2 = f._2.toBuffer
       val i2_2 = i2.sortBy(_._2)
-      if (i2_2.length > topK) {
-        i2_2.remove(0, (i2_2.length - topK))
+      if (i2_2.length > r_number) {
+        i2_2.remove(0, (i2_2.length - r_number))
       }
       (f._1, i2_2.toIterable)
     }).flatMap(f => {
@@ -257,7 +148,7 @@ object ItemBaseCF extends Serializable {
       (user,(item_j,predict) )
     })
     //矩阵计算——用户：用户对结果排序，过滤
-    item_predict.groupByKey.map(f => {
+    rdd_sum.groupByKey.map(f => {
       val i2 = f._2.toBuffer
       val i2_2 = i2.sortBy(_._2)
       if (i2_2.length > r_number)i2_2.remove(0,(i2_2.length-r_number))
@@ -272,26 +163,15 @@ object ItemBaseCF extends Serializable {
   def main(args: Array[String]) {
 
     //parse to user,item,rating 3tuple
-    val ratings: RDD[(String, String, Double)] = loadTrainData(sc,train_path)
+    val ratings: RDD[(String, String, Double)] = CommonUtil.loadTrainData(sc,train_path)
 
     //calculate similarity
-    val rdd_cosine_s: RDD[(String, String, Double)] = similarity("cosine_s",ratings) //(8102,6688,0.006008038124054778)
+    val sim = CosineSimilarity
+    val rdd_cosine_s: RDD[(String, String, Double)] = sim.similarity("cosine",ratings) //(8102,6688,0.006008038124054778)
 
     //recommend to user top n
     val recommend_ = recommend(rdd_cosine_s, ratings,10)
 
-    //predict item rating
-    val predict_ = predict(rdd_cosine_s, ratings, 10)
-
-    //predict item rating
-    // 冷启动，如果用户没有评分，默认是平均值
-    loadTestData(sc, test_path).map(t2 => (t2, 2.5)).leftOuterJoin(predict_.map(t2 => ((t2._1, t2._2._1), t2._2._2))).map(t2 => {
-      var res = 3.4952
-      if(t2._2._2 != None){
-        res = t2._2._2.get
-      }
-      res
-    }).repartition(1).saveAsTextFile(predict_path)
   }
 
 }

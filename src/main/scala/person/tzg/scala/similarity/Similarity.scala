@@ -6,7 +6,7 @@ import org.apache.spark.rdd.RDD
  * Created by arachis on 2016/11/22.
  * 抽象相似度或相似距离的计算
  */
-abstract class Similarity {
+abstract class Similarity extends Serializable{
   /**
    * 计算物品的相似度算法
    * @param sim_type 相似度计算方法

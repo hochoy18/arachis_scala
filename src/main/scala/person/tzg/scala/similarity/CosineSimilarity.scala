@@ -12,7 +12,7 @@ import org.apache.spark.rdd.RDD
  *
  * 注：假定已经对数据做了标准化
  */
-class CosineSimilarity extends Similarity{
+object CosineSimilarity extends Similarity {
   /**
    * 计算物品的相似度算法
    * @param sim_type 相似度计算方法
@@ -28,6 +28,10 @@ class CosineSimilarity extends Similarity{
       val rating = t3._3
       (user, (item, rating))
     })
+
+    //cache
+    user_row.cache()
+    user_row.count()
 
     //user key join user key
     val sim = user_row.join(user_row).map(t2 => {
@@ -51,9 +55,10 @@ class CosineSimilarity extends Similarity{
       (t2._1._1,t2._1._2, 1.0 * (cosine * 10000).toInt / 10000)
     })
     //矩阵反转，没有相同物品的相似度
-    val union = sim.map(t3 => {
-      (t3._1._2, t._1._1, t._1._3)
+    val union: RDD[(String, String, Double)] = sim.map(t3 => {
+      (t3._1, t3._2, t3._3)
     }).union(sim)
     union
   }
+
 }
