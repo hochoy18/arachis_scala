@@ -1,75 +1,67 @@
 package person.tzg.scala.predict
 
-import com.yyt.scala.CommonUtil
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import person.tzg.scala.common.CommonUtil
-import person.tzg.scala.similarity.CosineSimilarity
 
 /**
  * Created by arachis on 2016/11/24.
  * 基于物品的协同过滤的评分预测算法
  * 物品相似度矩阵过于庞大：如果物品有5w,那存储相似矩阵就要5w * 5w
  * 此矩阵的数据结构一定要优化：
- *  将用户评分数据和物品相似度数据以spark mllib中的RowMatrix形式存储
+ *  将用户评分数据和物品相似度数据以spark mllib中的Matrix形式存储
  *  计算评分
- *  参考自：http://3iter.com/2015/10/12/用spark实现基于物品属性相似度的推荐算法/
+ *  参考自：
+ *    http://3iter.com/2015/10/12/用spark实现基于物品属性相似度的推荐算法/
+ *    http://spark.apache.org/docs/2.0.0/mllib-data-types.html#coordinatematrix
+ *
  */
 object ItemBaseCF extends Serializable{
 
   val conf = new SparkConf().setAppName(this.getClass.getName)
   val sc = new SparkContext(conf)
-  val train_path: String = "/tmp/train.csv"
-  val test_path = "/tmp/test.csv"
-  val predict_path = "/user/tongzhenguo/recommend/cosine_predict"
+  val HDFS = "hdfs://192.168.1.222:8020"
+  val train_path: String = HDFS+"/tmp/train.csv"
+  val test_path = HDFS+"/tmp/test.csv"
+  val predict_path = HDFS+"/user/tongzhenguo/recommend/cosine_predict"
   val split: String = ","
 
   def main(args: Array[String]) {
 
-    val item_sim_entry = sc.textFile("/user/tongzhenguo/recommend/sim_cosine").map(s => {
+    val item_sim_entry = sc.textFile(HDFS+"/user/tongzhenguo/recommend/sim_cosine").map(s => {
       val ss = s.replaceAll("\\(", "").replaceAll("\\)", "").split(",")
       ( ss(0).toLong, ss(1).toLong, ss(2).toDouble )
-    }).map{case (userID,itemID,rating) =>
-      new MatrixEntry(userID,itemID,rating)
+    }).distinct.map{case (userID,itemID,sim) =>
+      new MatrixEntry(userID,itemID,sim)
     }
     //load sim pair to CoordinateMatrix
     val simMat: CoordinateMatrix = new CoordinateMatrix(item_sim_entry)
+    //A CoordinateMatrix can be converted to an IndexedRowMatrix with sparse rows by calling toIndexedRowMatrix.
+    // Other computations for CoordinateMatrix are not currently supported.
+    val simMatrix = simMat.toIndexedRowMatrix().toBlockMatrix().cache()
+    simMatrix.validate
 
+    //load user rating data to BlockMatrix
     val ratingData = CommonUtil.loadTrainData(sc, train_path)
-
-    //用户id集合
-    val users = ratingData.map{case (user,item,rating)=>
-      user
-    }.distinct.sortBy(uid => uid)
-
-    //load user rating data to CoordinateMatrix
     val user_rating_entrys = ratingData.map { case (userID, itemID, rating) =>
       new MatrixEntry(userID.toLong, itemID.toLong, rating.toDouble)
     }
-    //load user rating to CoordinateMatrix
     val ratingMat: CoordinateMatrix = new CoordinateMatrix(user_rating_entrys)
+    val item_rating = ratingMat.toIndexedRowMatrix().toBlockMatrix().transpose
+    item_rating.validate
 
-    //10为分块数
-    val mm8 = simMat.toIndexedRowMatrix().toBlockMatrix().multiply(ratingMat.toIndexedRowMatrix().toBlockMatrix())
+    val mm8 = simMatrix.multiply(item_rating)
     //矩阵转置
     val mm9 = mm8.transpose.toIndexedRowMatrix()
-    //(Long,String),用户索引（从0开始的连续整数）与用户ID
-    //val users1 = users.zipWithIndex().map(f=>(f._2,f._1)).sortByKey()
-    //把索引都换成ID
-    val mm10 = mm9.rows.map(f=>(f.index,f.vector)).sortByKey().join(users1).map{
-      case (index, (vector,w) ) => (vector,w)
-    }
 
-    //parse to user,item,rating 3tuple
-    val ratings: RDD[(String, String, Double)] = CommonUtil.loadTrainData(sc,train_path)
+    val mm10 = mm9.rows.map{
+      case row =>
+        val uid = row.index
+        val item_pref_vector = row.vector
+        (uid,item_pref_vector)
+    }.sortByKey()
 
-    //calculate similarity
-    val sim = CosineSimilarity
-    val rdd_cosine_s: RDD[(String, String, Double)] = sim.similarity("cosine",ratings) //(8102,6688,0.006008038124054778)
-
-    //predict item rating
-    val predict_ = predict(rdd_cosine_s, ratings,sc)
   }
 
 
