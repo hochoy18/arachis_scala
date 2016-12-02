@@ -43,7 +43,61 @@
       <artifactId>scala-library</artifactId>
       <version>${scala.version}</version>
     </dependency>
+
+    <!--          HBase dependencies          -->
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-testing-util</artifactId>
+      <version>0.98.6-hadoop2</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-annotations</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.jruby</groupId>
+          <artifactId>jruby-complete</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-protocol</artifactId>
+      <version>0.98.6-hadoop2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-common</artifactId>
+      <version>0.98.6-hadoop2</version>
+      <exclusions>
+        <exclusion>
+          <!--  SPARK-4455  -->
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-annotations</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-client</artifactId>
+      <version>0.98.6-hadoop2</version>
+      <exclusions>
+        <exclusion>
+          <!--  SPARK-4455  -->
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-annotations</artifactId>
+        </exclusion>
+        <exclusion>
+          <artifactId>netty</artifactId>
+          <groupId>io.netty</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
   </dependencies>
+
 
   <build>
     <sourceDirectory>src/main/scala</sourceDirectory>
