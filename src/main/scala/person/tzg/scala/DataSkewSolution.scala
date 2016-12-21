@@ -8,7 +8,9 @@ import org.apache.spark.{SparkConf, SparkContext}
  */
 object DataSkewSolution extends Serializable{
   import org.apache.spark.rdd.RDD
-  val headers = "/path/to/prefix"
+
+  val HDFS = "hdfs://192.168.1.222:8020"
+  val headers = HDFS + "/path/to/prefix"
   val day = "2016-10-08"
   val USER_OPERATION_R = 9
   val USER_OPERATION_OPERATION_TYPE = 4
