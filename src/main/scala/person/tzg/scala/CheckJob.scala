@@ -1,6 +1,7 @@
 package person.tzg.scala
 
 import org.apache.spark.{SparkConf, SparkContext}
+import utils.DateUtils
 
 /**
  * Created by arachis on 2016/11/14.

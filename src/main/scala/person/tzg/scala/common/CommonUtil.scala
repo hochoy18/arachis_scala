@@ -1,6 +1,6 @@
 package person.tzg.scala.common
 
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import utils.VaildLogUtils
 
@@ -13,10 +13,6 @@ object CommonUtil extends Serializable{
   val test_path = "/tmp/test.csv"
   val split: String = ","
 
-  /**
-   * 加载训练集
-   * @param sc
-   */
   def loadTrainData(sc: SparkContext,path:String): RDD[(String, String, Double)] = {
     //parse to user,item,rating 3tuple
     val ratings = sc.textFile(path, 200).filter(l => {
@@ -31,10 +27,7 @@ object CommonUtil extends Serializable{
     ratings
   }
 
-  /**
-   * 加载测试集
-   * @param sc
-   */
+
   def loadTestData(sc: SparkContext,path:String): RDD[(String, String)] = {
     //parse to user,item 3tuple
     val ratings = sc.textFile(path, 200).filter(l => {
@@ -49,11 +42,7 @@ object CommonUtil extends Serializable{
     ratings
   }
 
-  /**
-   * 计算物品评分均值
-   * @param user_rating 原始评分矩阵
-   * @return （item,mean）
-   */
+
   def getMean(user_rating: RDD[(String, String, Double)]): RDD[(String,Double)] ={
 
     val rdd_item_mean = user_rating.map(t3 => (t3._2,(t3._3,1))).reduceByKey((v1,v2)=>( v1._1+v2._1,v1._2+v2._2 )).map(t2 =>{

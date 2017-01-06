@@ -3,16 +3,16 @@ package learntoscala
 /**
  * Created by arachis on 2016/12/23.
  *
- * ¡¶¿ìÑ§scala¡· 17.3½Ú ÀàĞÍ±äÁ¿½ç¶¨Ê¾Àı
+ * ã€Šå¿«å­¦scalaã€‹ 17.3èŠ‚ ç±»å‹å˜é‡ç•Œå®šç¤ºä¾‹
  */
 object ScalaTypeVarDefineDemo {
 
-  /*  * ±àÒë»á³ö´í£¬ÒòÎª²¢²»ÖªµÀfirstÊÇ·ñÓĞcompareTo·½·¨£»ĞèÒªÌí¼ÓÒ»¸öÉÏ½ç T<:Comparable[T],ÕâÒâÎ¶×ÅT±ØĞëÊÇComparable[T]µÄ×ÓÀàĞÍ
+  /*  * ç¼–è¯‘ä¼šå‡ºé”™ï¼Œå› ä¸ºå¹¶ä¸çŸ¥é“firstæ˜¯å¦æœ‰compareToæ–¹æ³•ï¼›éœ€è¦æ·»åŠ ä¸€ä¸ªä¸Šç•Œ T<:Comparable[T],è¿™æ„å‘³ç€Tå¿…é¡»æ˜¯Comparable[T]çš„å­ç±»å‹
     class Pair(val first:T,val second:T){
       def smaller = if (first.compareTo(second) < 0) first else second
     }*/
 
-  //Í¨¹ıÕâ¸öÏŞ¶¨£¬
+  //é€šè¿‡è¿™ä¸ªé™å®šï¼Œ
   class Pair[T <: Comparable[T]](val first: T, val second: T) {
     def smaller = if (first.compareTo(second) < 0) first else second
   }
@@ -22,13 +22,13 @@ object ScalaTypeVarDefineDemo {
 
 
   /**
-   * Ò²¿ÉÒÔÎªÀàĞÍÖ¸¶¨Ò»¸öÏÂ½ç¡£¾ÙÀıÀ´½²£¬¼Ù¶¨ÎÒÃÇÏëÒª¶¨ÒåÒ»¸ö·½·¨£¬ÓÃÁíÒ»¸öÖµÌæ»»¶ÔÅ¼µÄµÚÒ»¸ö×é¼ş
+   * ä¹Ÿå¯ä»¥ä¸ºç±»å‹æŒ‡å®šä¸€ä¸ªä¸‹ç•Œã€‚ä¸¾ä¾‹æ¥è®²ï¼Œå‡å®šæˆ‘ä»¬æƒ³è¦å®šä¹‰ä¸€ä¸ªæ–¹æ³•ï¼Œç”¨å¦ä¸€ä¸ªå€¼æ›¿æ¢å¯¹å¶çš„ç¬¬ä¸€ä¸ªç»„ä»¶
    */
-  class Pair[T <: Comparable[T]](val first: T, val second: T) {
+/*  class Pair[T <: Comparable[T]](val first: T, val second: T) {
     //def repalceFirst(newFirst:T) = new Pair[T](newFirst,second)
-    //¼Ù¶¨ÎÒÃÇÓĞÒ»¸öPair[Student],ÎÒÃÇÓ¦¸ÃÔÊĞíÓÃÒ»¸öPersonÀ´Ìæ»»µÚÒ»¸ö×é¼ş¡£Ìæ»»½øÀ´µÄÀàĞÍ±ØĞëÊÇÔ­ÀàĞÍµÄ³¬ÀàĞÍ
+    //å‡å®šæˆ‘ä»¬æœ‰ä¸€ä¸ªPair[Student],æˆ‘ä»¬åº”è¯¥å…è®¸ç”¨ä¸€ä¸ªPersonæ¥æ›¿æ¢ç¬¬ä¸€ä¸ªç»„ä»¶ã€‚æ›¿æ¢è¿›æ¥çš„ç±»å‹å¿…é¡»æ˜¯åŸç±»å‹çš„è¶…ç±»å‹
     def repalceFirst[R >: T](newFirst: R) = new Pair[R](newFirst, second)
-  }
+  }*/
 
 
 }
