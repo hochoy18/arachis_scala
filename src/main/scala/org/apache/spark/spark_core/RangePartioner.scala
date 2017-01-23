@@ -18,7 +18,7 @@ object RangePartioner extends Serializable {
     part.getPartition("A")
     //res4: Int = 4
 
-    scala > part.getPartition("W")
+    part.getPartition("W")
     //res6: Int = 1
 
 

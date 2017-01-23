@@ -7,13 +7,6 @@ import person.tzg.scala.common.CommonUtil
 
 /**
  * Created by arachis on 2016/11/24.
- * 基于物品的协同过滤的评分预测算法
- * 物品相似度矩阵过于庞大：如果物品有5w,那存储相似矩阵就要5w * 5w
- * 此矩阵的数据结构一定要优化：
- *  将用户评分数据和物品相似度数据以spark mllib中的Matrix形式存储
- *  计算评分
- *  参考自：
- *    http://3iter.com/2015/10/12/用spark实现基于物品属性相似度的推荐算法/
  *    http://spark.apache.org/docs/2.0.0/mllib-data-types.html#coordinatematrix
  *
  */
@@ -52,7 +45,7 @@ object ItemBaseCF extends Serializable{
     item_rating.validate
 
     val mm8 = simMatrix.multiply(item_rating)
-    //矩阵转置
+
     val mm9 = mm8.transpose.toIndexedRowMatrix()
 
     val mm10 = mm9.rows.map{
@@ -65,16 +58,9 @@ object ItemBaseCF extends Serializable{
   }
 
 
-  /**
-   * 预测用户对物品的评分
-   * @param item_similarity 物品相似度  151098234 pairs
-   * @param user_rating 用户评分数据
-   * @return (user,(item_j,predict) )
-   */
   def predict(item_similarity: RDD[(String, String, Double)], user_rating: RDD[(String, String, Double)],sc:SparkContext): RDD[(String, (String, Double))] = {
     val numPartitions: Int = 500
 
-    //缩小相似度矩阵，只留下相似度最高的前100个
     val sorted_item_sim: RDD[(String, String, Double)] = item_similarity.map(t3 => {
       (t3._1, (t3._2, t3._3))
     }).groupByKey().map(f => {
@@ -90,12 +76,11 @@ object ItemBaseCF extends Serializable{
 
     })
 
-    //计算物品评分均值
+
     val rdd_item_mean = CommonUtil.getMean(user_rating)
     val item_mean_map = rdd_item_mean.collectAsMap()
     val broadcast = sc.broadcast(item_mean_map)
-    
-    //计算物品差值
+
     val rdd_item_diff = user_rating.map(t3 => (t3._2, (t3._1, t3._3))).map(t2 =>{
       val item = t2._1
       val user = t2._2._1
@@ -108,7 +93,6 @@ object ItemBaseCF extends Serializable{
       (item,(user,diff))
     })
 
-    //矩阵计算——i行与j列元素相乘
     val rdd_1 = item_similarity.map(t3 => (t3._2, (t3._1, t3._3))).join(rdd_item_diff,numPartitions).map(t2 => {
 
       val item = t2._2._1._1
@@ -121,7 +105,6 @@ object ItemBaseCF extends Serializable{
       ( (user, item), (fenzi,fenmu) )
     })
 
-    //矩阵计算——用户：元素累加求和
     val rdd_sum = rdd_1.reduceByKey((v1_t2,v2_t2)=>{
       val sum_fenzi: Double = v1_t2._1+v2_t2._1
       val sum_fenmu: Double = v1_t2._2+v2_t2._2

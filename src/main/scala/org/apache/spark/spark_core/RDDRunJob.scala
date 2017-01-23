@@ -2,12 +2,7 @@ package org.apache.spark.spark_core
 
 import org.apache.spark.{SparkConf, SparkContext}
 
-/**
- * Created by arachis on 2016/12/21.
- *
- * 测试Spark APP 运行的过程
- *
- */
+
 object RDDRunJob extends Serializable {
   val sc = new SparkContext(new SparkConf())
 
