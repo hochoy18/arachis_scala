@@ -28,7 +28,6 @@ object PageRank extends Serializable{
       ranks.collect.foreach(println)
     }
 
-
   }
 
 }
