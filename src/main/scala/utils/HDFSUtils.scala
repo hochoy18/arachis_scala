@@ -3,6 +3,10 @@ package utils
 import java.io.IOException
 import java.net.URI
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FSDataOutputStream, FileSystem, Path, FileStatus}
+import org.apache.hadoop.mapred.JobConf
+
 /**
  * Created by Tongzhenguo on 2017/5/19.
  */

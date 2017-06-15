@@ -3,6 +3,9 @@ package utils
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, IOException}
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
+import org.apache.commons.codec.binary.Base64
+import org.apache.commons.lang3.StringUtils
+
 /**
  * Created by Tongzhenguo on 2017/5/27.
  */

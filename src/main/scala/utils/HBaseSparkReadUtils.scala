@@ -1,3 +1,4 @@
+/*
 package utils
 
 import org.apache.spark.{SparkConf, SparkContext}
@@ -87,3 +88,4 @@ object HBaseSparkReadUtils extends Serializable {
   }
 
 }
+*/
