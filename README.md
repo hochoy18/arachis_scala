@@ -1,7 +1,15 @@
-# my_scala_code
+### my_scala_code
 
-我的scala/spark程序
+#### 模块说明
+- learntoscala scala语法学习用例
+- model 机器学习模型实现
+- org.apache.spark  spark相关
+- person.tzg.scala 自己实现的scala/spark程序
+- scopt 用来解析参数的scala包,相当于python中的ConfigParser
+- utils 各工具包
 
-实现基于spark的协同过滤
+
+
+
 
 
