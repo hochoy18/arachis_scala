@@ -3,6 +3,7 @@ package org.apache.spark
 import org.apache.spark.sql.functions.rand
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import scala.collection.mutable.ArrayBuilder
+import org.apache.spark.sql.functions
 
 /**
   * Created by tongzhenguo on 2018/6/13.
@@ -12,6 +13,10 @@ import scala.collection.mutable.ArrayBuilder
   * 输出：output：DataFrame,以上界分割点或者字符串枚举为值重新构建的一个数据框
   * 实现：
   * 测试：
+  * 1.基本功能 解决
+  * 2.当连续列独立值小于maxBin，期待直接离散化值就是原值 解决
+  * 3.类别型取值范围较大,可能超出10000种独立值 abs(hash(col) % 10000)
+  * 4.java.lang.ClassCastException: java.lang.Integer cannot be cast to java.lang.Double 解决
   */
 object FindSplit {
 
@@ -24,37 +29,110 @@ object FindSplit {
 
     // 测试离散化分区方法
     var input: DataFrame = spark.sparkContext.parallelize(
-      0 until 10).map(_.toString).toDF(
+      0 until 100000).map(_.toString).toDF(
       "id").withColumn(
       "a", rand(seed=10)
     ).withColumn("b", rand(seed=27)
     )
     val input2: DataFrame = spark.sparkContext.parallelize(
-      0 until 10).map(_.toString).toDF(
+      0 until 100000).map(_.toString).toDF(
       "id").withColumn(
-      "a", rand(seed=10)
-    ).withColumn("b", rand(seed=27)
+      "a", rand(seed=15)
+    ).withColumn("b", rand(seed=37)
     )
 
     input = input.union(input2)
+    input.createOrReplaceTempView("spark_tmp_table")
+    val sql =
+      """
+        |select id,a,b,case when b > 0.5 then 1 else 0 end as c
+        |from spark_tmp_table
+      """.stripMargin
+    input = spark.sql(sql)
 
-    getSplitResult(input,maxBins = 10)
+    // getSplitResult(input,maxBins = 10) // maxBins must more than category column maximum distinct value count,10<100000
+    getSplitResult(input,maxBins = 10000)
+    /*
++---+-------------------+-------------------+---+
+| id|                  a|                  b|  c|
++---+-------------------+-------------------+---+
+|  0|0.41371264720975787|  0.714105256846827|  1|
+|  1| 0.1982919638208397|0.19369846818250636|  0|
+|  2|0.12714181165849525| 0.0838940132767162|  0|
+|  3|0.12030715258495939| 0.8122802274304282|  1|
+|  4|0.12131363910425985|  0.347961126155543|  0|
+|  5|0.44292918521277047|0.31429268272540556|  0|
+|  6| 0.2731073068483362| 0.3221262660507942|  0|
+|  7| 0.7784518091224375|0.05454409475794908|  0|
+|  8|   0.87079354700073| 0.3134176192702436|  0|
+|  9| 0.8729462507631428| 0.9070676516763825|  1|
+|  0|0.41371264720975787|  0.714105256846827|  1|
+|  1| 0.1982919638208397|0.19369846818250636|  0|
+|  2|0.12714181165849525| 0.0838940132767162|  0|
+|  3|0.12030715258495939| 0.8122802274304282|  1|
+|  4|0.12131363910425985|  0.347961126155543|  0|
+|  5|0.44292918521277047|0.31429268272540556|  0|
+|  6| 0.2731073068483362| 0.3221262660507942|  0|
+|  7| 0.7784518091224375|0.05454409475794908|  0|
+|  8|   0.87079354700073| 0.3134176192702436|  0|
+|  9| 0.8729462507631428| 0.9070676516763825|  1|
++---+-------------------+-------------------+---+
+show splits:
+id:0,1,2,3,4,5,6,7,8,9
+a:0.12030715258495939,0.12131363910425985,0.12714181165849525,0.1982919638208397,0.2731073068483362,0.41371264720975787,0.44292918521277047,0.7784518091224375,0.87079354700073,0.8729462507631428
+b:0.05454409475794908,0.0838940132767162,0.19369846818250636,0.3134176192702436,0.31429268272540556,0.3221262660507942,0.347961126155543,0.714105256846827,0.8122802274304282,0.9070676516763825
+c:0.0,1.0
++---+-------------------+-------------------+---+
+| id|                  a|                  b|  c|
++---+-------------------+-------------------+---+
+|  0|0.44292918521277047| 0.8122802274304282|1.0|
+|  1| 0.2731073068483362| 0.3134176192702436|0.0|
+|  2| 0.1982919638208397|0.19369846818250636|0.0|
+|  3|0.12131363910425985| 0.9070676516763825|1.0|
+|  4|0.12714181165849525|  0.714105256846827|0.0|
+|  5| 0.7784518091224375| 0.3221262660507942|0.0|
+|  6|0.41371264720975787|  0.347961126155543|0.0|
+|  7|   0.87079354700073| 0.0838940132767162|0.0|
+|  8| 0.8729462507631428|0.31429268272540556|0.0|
+|  9| 0.8729462507631428| 0.9070676516763825|1.0|
+|  0|0.44292918521277047| 0.8122802274304282|1.0|
+|  1| 0.2731073068483362| 0.3134176192702436|0.0|
+|  2| 0.1982919638208397|0.19369846818250636|0.0|
+|  3|0.12131363910425985| 0.9070676516763825|1.0|
+|  4|0.12714181165849525|  0.714105256846827|0.0|
+|  5| 0.7784518091224375| 0.3221262660507942|0.0|
+|  6|0.41371264720975787|  0.347961126155543|0.0|
+|  7|   0.87079354700073| 0.0838940132767162|0.0|
+|  8| 0.8729462507631428|0.31429268272540556|0.0|
+|  9| 0.8729462507631428| 0.9070676516763825|1.0|
++---+-------------------+-------------------+---+
+
+     */
 
   }
 
 
-  def getSplitResult(input:DataFrame,maxBins:Int=32):DataFrame = {
+  def getSplitResult(inputDF:DataFrame, maxBins:Int=32):DataFrame = {
+    var input = inputDF
     // todo 统计类别型独立值个数，验证maxBins是否正确
     var categoryMaxDistinCount = 0L
     var continuousFeatures = Array[String]()
     for((colname,coltype) <- input.dtypes ){
 
       if("StringType".equals(coltype)){
-        val featValCount = input.select(colname).distinct().count()
+        var featValCount = input.select(colname).distinct().count()
         if(featValCount > categoryMaxDistinCount){
+          if(featValCount > 10000){
+            featValCount = 10000L
+            val exprFormat = "cast(abs(hash("+colname+") % 10000) as varchar)"
+            input = input.withColumn("hash_%s".format(colname),functions.expr(exprFormat))
+            input = input.drop(colname).withColumnRenamed("hash_%s".format(colname),colname)
+          }
           categoryMaxDistinCount = featValCount
         }
-      }else{
+      }else{ // all convert to double type
+        input = input.withColumn("cast_%s".format(colname),functions.expr("cast(%s as double)".format(colname)))
+        input = input.drop(colname).withColumnRenamed("cast_%s".format(colname),colname)
         continuousFeatures = continuousFeatures :+ colname
       }
     }
@@ -86,6 +164,9 @@ object FindSplit {
       for(idx <- 0 until row.length){
         val newVal = if(!continuousFeatures.contains(columns(idx))){
           row(idx).toString
+        }else if(splits(idx).length < maxBins){
+          // 如果连续值独立数小于maxBins,直接返回原值
+          row(idx).toString.toDouble
         }else{
           // todo 二分查找分割点
           find(row(idx).toString.toDouble,splits(idx).map(_.toString.toDouble))
@@ -96,32 +177,6 @@ object FindSplit {
     })
     val retDF = input.sparkSession.createDataFrame(retRDD,input.schema)
     retDF.show()
-    /*
-+---+-------------------+-------------------+
-| id|                  a|                  b|
-+---+-------------------+-------------------+
-|  0|0.42832091621126417| 0.7631927421386275|
-|  1|0.23569963533458793|0.25355804372637497|
-|  2|0.16271688773966747|0.13879624072961128|
-|  3|0.12081039584460962| 0.8596739395534053|
-|  4|0.12422772538137755|  0.531033191501185|
-|  5| 0.6106904971676039| 0.3182094743880999|
-|  6|  0.343409977029047| 0.3350436961031686|
-|  7| 0.8246226780615837|0.06921905401733264|
-|  8| 0.8718698988819364| 0.3138551509978246|
-|  9| 0.8718698988819364| 0.8596739395534053|
-|  0|0.42832091621126417| 0.7631927421386275|
-|  1|0.23569963533458793|0.25355804372637497|
-|  2|0.16271688773966747|0.13879624072961128|
-|  3|0.12081039584460962| 0.8596739395534053|
-|  4|0.12422772538137755|  0.531033191501185|
-|  5| 0.6106904971676039| 0.3182094743880999|
-|  6|  0.343409977029047| 0.3350436961031686|
-|  7| 0.8246226780615837|0.06921905401733264|
-|  8| 0.8718698988819364| 0.3138551509978246|
-|  9| 0.8718698988819364| 0.8596739395534053|
-+---+-------------------+-------------------+
-     */
     retDF
   }
   
@@ -175,7 +230,7 @@ object FindSplit {
 
       input.rdd
         .flatMap { row =>
-          continuousFeatures.map(col => (col,row.getAs[Double](col))).filter(_._2!= 0.0)
+          continuousFeatures.map(col => (col,row.getAs[Double](col)))//.filter(_._2!= 0.0)
         }
         .groupByKey(numPartitions)
         .map { case (col, samples) =>
@@ -197,6 +252,7 @@ object FindSplit {
     }
     splits
   }
+
 
   /**
     * Find splits for a continuous feature
@@ -242,13 +298,10 @@ object FindSplit {
       val valueCounts = valueCountMap.toSeq.sortBy(_._1).toArray
 
       val possibleSplits = valueCounts.length - 1
-      if (possibleSplits == 0) {
-        // constant feature
-        Array.empty[Double]
-      } else if (possibleSplits <= numSplits) {
-        // if possible splits is not enough or just enough, just return all possible splits
-        (1 to possibleSplits)
-          .map(index => (valueCounts(index - 1)._1 + valueCounts(index)._1) / 2.0)
+      if (valueCounts.length <= maxBins) {
+        // if distinct value is not enough or just enough, just return all distinct value
+        (0 until valueCounts.length)
+          .map(index => valueCounts(index)._1)
           .toArray
       } else {
         // stride between splits
