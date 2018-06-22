@@ -1,5 +1,5 @@
-### my_scala_code
-
+### arachis_scala
+---------
 #### 模块说明
 - learntoscala scala语法学习用例
 - model 机器学习模型实现
