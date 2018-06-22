@@ -1,12 +1,13 @@
 package org.apache.spark
 
 import org.apache.spark.sql.functions.rand
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession, functions}
+
 import scala.collection.mutable.ArrayBuilder
-import org.apache.spark.sql.functions
 
 /**
-  * Created by tongzhenguo on 2018/6/13.
+  * 提供互信息相关性分析中的内置离散化方法
+  * Created by tongzhenguo on 2018/6/14.
   * desc:改写spark决策树的分割算法为互信息相关性分析法的内置离散化方法
   * 需求分析：
   * 输入：input：DataFrame,maxBins:int,最大特征数，要求大于2,建议值32,且大于等于字符串型列独立值个数，由于抽样样本最多1w，maxBins也不超过一万
@@ -16,211 +17,118 @@ import org.apache.spark.sql.functions
   * 1.基本功能 解决
   * 2.当连续列独立值小于maxBin，期待直接离散化值就是原值 解决
   * 3.类别型取值范围较大,可能超出10000种独立值 abs(hash(col) % 10000)
-  * 4.java.lang.ClassCastException: java.lang.Integer cannot be cast to java.lang.Double 解决
   */
 object FindSplit {
 
-  def main(args: Array[String]): Unit = {
-
-    val spark = SparkSession
-      .builder()
-      .getOrCreate()
-    import spark.implicits._
-
-    // 测试离散化分区方法
-    var input: DataFrame = spark.sparkContext.parallelize(
-      0 until 100000).map(_.toString).toDF(
-      "id").withColumn(
-      "a", rand(seed=10)
-    ).withColumn("b", rand(seed=27)
-    )
-    val input2: DataFrame = spark.sparkContext.parallelize(
-      0 until 100000).map(_.toString).toDF(
-      "id").withColumn(
-      "a", rand(seed=15)
-    ).withColumn("b", rand(seed=37)
-    )
-
-    input = input.union(input2)
-    input.createOrReplaceTempView("spark_tmp_table")
-    val sql =
-      """
-        |select id,a,b,case when b > 0.5 then 1 else 0 end as c
-        |from spark_tmp_table
-      """.stripMargin
-    input = spark.sql(sql)
-
-    // getSplitResult(input,maxBins = 10) // maxBins must more than category column maximum distinct value count,10<100000
-    getSplitResult(input,maxBins = 10000)
-    /*
-+---+-------------------+-------------------+---+
-| id|                  a|                  b|  c|
-+---+-------------------+-------------------+---+
-|  0|0.41371264720975787|  0.714105256846827|  1|
-|  1| 0.1982919638208397|0.19369846818250636|  0|
-|  2|0.12714181165849525| 0.0838940132767162|  0|
-|  3|0.12030715258495939| 0.8122802274304282|  1|
-|  4|0.12131363910425985|  0.347961126155543|  0|
-|  5|0.44292918521277047|0.31429268272540556|  0|
-|  6| 0.2731073068483362| 0.3221262660507942|  0|
-|  7| 0.7784518091224375|0.05454409475794908|  0|
-|  8|   0.87079354700073| 0.3134176192702436|  0|
-|  9| 0.8729462507631428| 0.9070676516763825|  1|
-|  0|0.41371264720975787|  0.714105256846827|  1|
-|  1| 0.1982919638208397|0.19369846818250636|  0|
-|  2|0.12714181165849525| 0.0838940132767162|  0|
-|  3|0.12030715258495939| 0.8122802274304282|  1|
-|  4|0.12131363910425985|  0.347961126155543|  0|
-|  5|0.44292918521277047|0.31429268272540556|  0|
-|  6| 0.2731073068483362| 0.3221262660507942|  0|
-|  7| 0.7784518091224375|0.05454409475794908|  0|
-|  8|   0.87079354700073| 0.3134176192702436|  0|
-|  9| 0.8729462507631428| 0.9070676516763825|  1|
-+---+-------------------+-------------------+---+
-show splits:
-id:0,1,2,3,4,5,6,7,8,9
-a:0.12030715258495939,0.12131363910425985,0.12714181165849525,0.1982919638208397,0.2731073068483362,0.41371264720975787,0.44292918521277047,0.7784518091224375,0.87079354700073,0.8729462507631428
-b:0.05454409475794908,0.0838940132767162,0.19369846818250636,0.3134176192702436,0.31429268272540556,0.3221262660507942,0.347961126155543,0.714105256846827,0.8122802274304282,0.9070676516763825
-c:0.0,1.0
-+---+-------------------+-------------------+---+
-| id|                  a|                  b|  c|
-+---+-------------------+-------------------+---+
-|  0|0.44292918521277047| 0.8122802274304282|1.0|
-|  1| 0.2731073068483362| 0.3134176192702436|0.0|
-|  2| 0.1982919638208397|0.19369846818250636|0.0|
-|  3|0.12131363910425985| 0.9070676516763825|1.0|
-|  4|0.12714181165849525|  0.714105256846827|0.0|
-|  5| 0.7784518091224375| 0.3221262660507942|0.0|
-|  6|0.41371264720975787|  0.347961126155543|0.0|
-|  7|   0.87079354700073| 0.0838940132767162|0.0|
-|  8| 0.8729462507631428|0.31429268272540556|0.0|
-|  9| 0.8729462507631428| 0.9070676516763825|1.0|
-|  0|0.44292918521277047| 0.8122802274304282|1.0|
-|  1| 0.2731073068483362| 0.3134176192702436|0.0|
-|  2| 0.1982919638208397|0.19369846818250636|0.0|
-|  3|0.12131363910425985| 0.9070676516763825|1.0|
-|  4|0.12714181165849525|  0.714105256846827|0.0|
-|  5| 0.7784518091224375| 0.3221262660507942|0.0|
-|  6|0.41371264720975787|  0.347961126155543|0.0|
-|  7|   0.87079354700073| 0.0838940132767162|0.0|
-|  8| 0.8729462507631428|0.31429268272540556|0.0|
-|  9| 0.8729462507631428| 0.9070676516763825|1.0|
-+---+-------------------+-------------------+---+
-
-     */
-
-  }
-
-
-  def getSplitResult(inputDF:DataFrame, maxBins:Int=32):DataFrame = {
+  def getSplitResult(inputDF: DataFrame, maxBins: Int = 32): DataFrame = {
     var input = inputDF
-    // todo 统计类别型独立值个数，验证maxBins是否正确
+    // 统计类别型独立值个数，验证maxBins是否正确
     var categoryMaxDistinCount = 0L
     var continuousFeatures = Array[String]()
-    for((colname,coltype) <- input.dtypes ){
+    for ((colname, coltype) <- input.dtypes) {
 
-      if("StringType".equals(coltype)){
+      if ("StringType".equals(coltype)) {
         var featValCount = input.select(colname).distinct().count()
-        if(featValCount > categoryMaxDistinCount){
-          if(featValCount > 10000){
+        if (featValCount > categoryMaxDistinCount) {
+          if (featValCount > 10000) {
             featValCount = 10000L
-            val exprFormat = "cast(abs(hash("+colname+") % 10000) as varchar)"
-            input = input.withColumn("hash_%s".format(colname),functions.expr(exprFormat))
-            input = input.drop(colname).withColumnRenamed("hash_%s".format(colname),colname)
+            val exprFormat = "cast(abs(hash(" + colname + ") % 10000) as varchar)"
+            input = input.withColumn("hash_%s".format(colname), functions.expr(exprFormat))
+            input = input.drop(colname).withColumnRenamed("hash_%s".format(colname), colname)
           }
           categoryMaxDistinCount = featValCount
         }
-      }else{ // all convert to double type
-        input = input.withColumn("cast_%s".format(colname),functions.expr("cast(%s as double)".format(colname)))
-        input = input.drop(colname).withColumnRenamed("cast_%s".format(colname),colname)
+      } else { // all convert to double type
+        input = input.withColumn("cast_%s".format(colname), functions.expr("cast(%s as double)".format(colname)))
+        input = input.drop(colname).withColumnRenamed("cast_%s".format(colname), colname)
         continuousFeatures = continuousFeatures :+ colname
       }
     }
 
-    if(maxBins < categoryMaxDistinCount){
+    if (maxBins < categoryMaxDistinCount) {
       val formatMsg = "maxBins must more than category column maximum distinct value count,%s<%s"
         .format(maxBins, categoryMaxDistinCount)
-      throw new IllegalArgumentException(formatMsg )
+      throw new IllegalArgumentException(formatMsg)
     }
-    if(maxBins > 100000){
+    if (maxBins > 100000) {
       val formatMsg = "maxBins must less than sample example count,%s>%s".format(maxBins, 10000)
       throw new IllegalArgumentException(formatMsg)
     }
 
-    // todo 改造findSplits,并调用之，根据结果构造output
+    // 改造findSplits,并调用之，根据结果构造output
     val schema = input.schema
     val columns = input.columns
     val numExamples = input.count()
-    var splits:Array[Array[_ >: Double with String]] = findSplits(maxBins,numExamples,continuousFeatures,input,seed = 888)
+    var splits: Array[Array[_ >: Double with String]] = findSplits(maxBins, numExamples, continuousFeatures, input, seed = 888)
 
     println("show splits:")
-    for((fields,idx) <- splits.zipWithIndex){
-      println("%s:%s".format(input.columns(idx),fields.mkString(",")))
+    for ((fields, idx) <- splits.zipWithIndex) {
+      println("%s:%s".format(input.columns(idx), fields.mkString(",")))
     }
 
-    // todo 以分割点替换特征值
+    // 以分割点替换特征值
     val retRDD = input.rdd.map(row => {
       var newRow = Array[Any]()
-      for(idx <- 0 until row.length){
-        val newVal = if(!continuousFeatures.contains(columns(idx))){
+      for (idx <- 0 until row.length) {
+        val newVal = if (!continuousFeatures.contains(columns(idx))) {
           row(idx).toString
-        }else if(splits(idx).length < maxBins){
+        } else if (splits(idx).length < maxBins) {
           // 如果连续值独立数小于maxBins,直接返回原值
           row(idx).toString.toDouble
-        }else{
-          // todo 二分查找分割点
-          find(row(idx).toString.toDouble,splits(idx).map(_.toString.toDouble))
+        } else {
+          // 查找分割点
+          find(row(idx).toString.toDouble, splits(idx).map(_.toString.toDouble))
         }
         newRow = newRow :+ newVal
       }
-      Row(newRow:_*)
+      Row(newRow: _*)
     })
-    val retDF = input.sparkSession.createDataFrame(retRDD,input.schema)
+    val retDF = input.sparkSession.createDataFrame(retRDD, input.schema)
     retDF.show()
     retDF
   }
-  
-  
+
+
   /**
     * Returns splits for decision tree calculation.
     * Continuous and categorical features are handled differently.
     *
     * Continuous features:
-    *   For each feature, there are numBins - 1 possible splits representing the possible binary
-    *   decisions at each node in the tree.
-    *   This finds locations (feature values) for splits using a subsample of the data.
+    * For each feature, there are numBins - 1 possible splits representing the possible binary
+    * decisions at each node in the tree.
+    * This finds locations (feature values) for splits using a subsample of the data.
     *
     * Categorical features:
-    *   all distinct value
+    * all distinct value
     *
-    * @param maxBins:int,最大分桶数
-    * @param numExamples:Long,样本数
-    * @param continuousFeatures:Array[String],连续特征数组
-    * @param input Training data: DataFrame
-    * @param seed random seed
+    * @param maxBins            :int,最大分桶数
+    * @param numExamples        :Long,样本数
+    * @param continuousFeatures :Array[String],连续特征数组
+    * @param input              Training data: DataFrame
+    * @param seed               random seed
     * @return Splits, an Array of [[Double with String]]
-    *          of size (numFeatures, numSplits)
+    *         of size (numFeatures, numSplits)
     */
-  def findSplits( maxBins:Int,
-                  numExamples:Long,
-                  continuousFeatures:Array[String],
-                  input: DataFrame,
-                  seed: Long): Array[Array[_ >: Double with String]] = {
+  def findSplits(maxBins: Int,
+                 numExamples: Long,
+                 continuousFeatures: Array[String],
+                 input: DataFrame,
+                 seed: Long): Array[Array[_ >: Double with String]] = {
 
     val numFeatures = input.columns.length
     // Sample the input only if there are continuous features.
-    val fraction = samplesFractionForFindSplits(maxBins,numExamples)
-    val sampledInput = input.sample(withReplacement = false, fraction, seed=888)
+    val fraction = samplesFractionForFindSplits(maxBins, numExamples)
+    val sampledInput = input.sample(withReplacement = false, fraction, seed = 888)
 
-    findSplitsBySorting(maxBins,numExamples,numFeatures,sampledInput.toDF(), continuousFeatures)
+    findSplitsBySorting(maxBins, numExamples, numFeatures, sampledInput.toDF(), continuousFeatures)
   }
 
 
-  def findSplitsBySorting( maxBins:Int,
-                           numExamples:Long,
-                           numFeatures:Int,
-                           input: DataFrame,
-                           continuousFeatures:Array[String]): Array[Array[_ >: Double with String]] = {
+  def findSplitsBySorting(maxBins: Int,
+                          numExamples: Long,
+                          numFeatures: Int,
+                          input: DataFrame,
+                          continuousFeatures: Array[String]): Array[Array[_ >: Double with String]] = {
 
     val continuousSplits: scala.collection.Map[String, Array[Double]] = {
       // reduce the parallelism for split computations when there are less
@@ -230,11 +138,11 @@ c:0.0,1.0
 
       input.rdd
         .flatMap { row =>
-          continuousFeatures.map(col => (col,row.getAs[Double](col)))//.filter(_._2!= 0.0)
+          continuousFeatures.map(col => (col, row.getAs[Double](col))) //.filter(_._2!= 0.0)
         }
         .groupByKey(numPartitions)
         .map { case (col, samples) =>
-          val thresholds = findSplitsForContinuousFeature(numExamples,maxBins,continuousFeatures,samples, col)
+          val thresholds = findSplitsForContinuousFeature(numExamples, maxBins, continuousFeatures, samples, col)
           (col, thresholds)
         }.collectAsMap()
     }
@@ -247,6 +155,7 @@ c:0.0,1.0
 
       case i if !continuousFeatures.contains(input.columns(i)) =>
         //  split is all distinct val
+
         val split = input.rdd.map(row => row(i).toString).distinct().collect()
         split
     }
@@ -257,21 +166,21 @@ c:0.0,1.0
   /**
     * Find splits for a continuous feature
     * NOTE: Returned number of splits is set based on `featureSamples` and
-    *       could be different from the specified `numSplits`.
-    *       The `numSplits` attribute in the `DecisionTreeMetadata` class will be set accordingly.
+    * could be different from the specified `numSplits`.
+    * The `numSplits` attribute in the `DecisionTreeMetadata` class will be set accordingly.
     *
-    * @param numExamples:Long,样本数
-    * @param maxBins:int,最大分桶数
-    * @param continuousFeatures:Array[String],连续特征数组
-    * @param featureSamples:Iterable[Double],同一列的所有特征值
-    * @param featureColName:String,特征列名称
+    * @param numExamples        :Long,样本数
+    * @param maxBins            :int,最大分桶数
+    * @param continuousFeatures :Array[String],连续特征数组
+    * @param featureSamples     :Iterable[Double],同一列的所有特征值
+    * @param featureColName     :String,特征列名称
     * @return array of split thresholds,Array[Double]
     */
-    def findSplitsForContinuousFeature( numExamples:Long,
-                                        maxBins:Int,
-                                        continuousFeatures:Array[String],
-                                        featureSamples: Iterable[Double],
-                                        featureColName: String): Array[Double] = {
+  def findSplitsForContinuousFeature(numExamples: Long,
+                                     maxBins: Int,
+                                     continuousFeatures: Array[String],
+                                     featureSamples: Iterable[Double],
+                                     featureColName: String): Array[Double] = {
 
     val splits: Array[Double] = if (featureSamples.isEmpty) {
       Array.empty[Double]
@@ -286,7 +195,7 @@ c:0.0,1.0
       }
 
       // Calculate the expected number of samples for finding splits
-      val numSamples = (samplesFractionForFindSplits(maxBins,numExamples) * numExamples).toInt
+      val numSamples = (samplesFractionForFindSplits(maxBins, numExamples) * numExamples).toInt
       // add expected zero value count and get complete statistics
       val valueCountMap: Map[Double, Int] = if (numSamples - partNumSamples > 0) {
         partValueCountMap.toMap + (0.0 -> (numSamples - partNumSamples))
@@ -342,11 +251,11 @@ c:0.0,1.0
   /**
     * Calculate the subsample fraction for finding splits
     *
-    * @param maxBins:int,最大分桶数
-    * @param numExamples:Long,样本数
+    * @param maxBins     :int,最大分桶数
+    * @param numExamples :Long,样本数
     * @return subsample fraction
     */
-   def samplesFractionForFindSplits(maxBins:Int,numExamples:Long): Double = {
+  def samplesFractionForFindSplits(maxBins: Int, numExamples: Long): Double = {
     // Calculate the number of samples for approximate quantile calculation.
     val requiredSamples = math.max(maxBins * maxBins, 10000)
     if (requiredSamples < numExamples) {
@@ -358,24 +267,60 @@ c:0.0,1.0
 
   /**
     * 有序数组寻找元素上界
+    *
     * @param value
     * @param array
     * @return Double
     */
-  def find(value:Double,array: Array[Double]):Double = {
+  def find(value: Double, array: Array[Double]): Double = {
     var ret = array(0)
-    if( value<array(0) ){
+    if (value < array(0)) {
       array(0)
     }
-    if( value>array.last ){
+    if (value > array.last) {
       ret = array.last
     }
-    for(idx <- 0 until array.length-1){
-      if( array(idx) <= value && array(idx+1)>= value ){
-        ret = array(idx+1)
+    for (idx <- 0 until array.length - 1) {
+      if (array(idx) <= value && array(idx + 1) >= value) {
+        ret = array(idx + 1)
       }
     }
     ret
+  }
+
+  def main(args: Array[String]): Unit = {
+
+    val spark = SparkSession
+      .builder()
+      .getOrCreate()
+    import spark.implicits._
+
+    // 测试离散化分区方法
+    var input: DataFrame = spark.sparkContext.parallelize(
+      0 until 100000).map(_.toString).toDF(
+      "id").withColumn(
+      "a", rand(seed = 10)
+    ).withColumn("b", rand(seed = 27)
+    )
+    val input2: DataFrame = spark.sparkContext.parallelize(
+      0 until 100000).map(_.toString).toDF(
+      "id").withColumn(
+      "a", rand(seed = 15)
+    ).withColumn("b", rand(seed = 37)
+    )
+
+    input = input.union(input2)
+    input.createOrReplaceTempView("spark_tmp_table")
+    val sql =
+      """
+        |select id,a,b,case when b > 0.5 then 1 else 0 end as c
+        |from spark_tmp_table
+      """.stripMargin
+    input = spark.sql(sql)
+
+    // getSplitResult(input,maxBins = 10) // maxBins must more than category column maximum distinct value count,10<100000
+    getSplitResult(input, maxBins = 10000)
+
   }
 
 }
