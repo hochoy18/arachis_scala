@@ -1,4 +1,4 @@
-package learntoscala
+package SClearn
 
 /**
   *

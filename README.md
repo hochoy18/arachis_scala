@@ -1,7 +1,7 @@
 ### arachis_scala
 ---------
 #### 模块说明
-- learntoscala scala语法学习用例
+- SClearn scala语法学习用例
 - model 机器学习模型实现
 - org.apache.spark  spark相关
 - person.tzg.scala 自己实现的scala/spark程序

@@ -1,4 +1,4 @@
-package learntoscala
+package SClearn
 
 /**
  * Created by arachis on 2016/12/23.
