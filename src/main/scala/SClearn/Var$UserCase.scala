@@ -21,6 +21,8 @@ object Var$UserCase {
     println(s"signl = ${signl.toDouble}")
     // 格式化写法
     println(f"signl = ${signl.toDouble}%2.2f")
+    // raw写法,不用转义
+    println(raw"signl = ${if(signl > 1000) "hot" else "cold"}")
   }
 
 
