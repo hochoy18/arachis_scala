@@ -6,7 +6,8 @@ package scopt
   */
 case class OptionConfig(
                          add:Int = 1,
-                         printMsg:String = ""
+                         printMsg:String = "",
+                         aggregate_conf:String = raw"{}"
                        )
 
 object ScheduleMenu {
@@ -18,6 +19,9 @@ object ScheduleMenu {
 
     opt[String]("printMsg").action((x, c) =>
       c.copy(printMsg = x)).text("the print message")
+
+    opt[String]("aggregate_conf").required().action((x, c) =>
+      c.copy(aggregate_conf = x))
 
 
     help("help").text("prints this usage info and exit")

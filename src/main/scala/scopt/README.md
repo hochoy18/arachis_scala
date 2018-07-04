@@ -13,8 +13,11 @@
 
 
 - 3.源码学习
-    3.1 [options.scala源码](https://github.com/Tongzhenguo/my_scala_code/tree/master/src/main/scala/scopt/options.scala)
-    3.2 [PlatformReadInstances.scala源码](https://github.com/Tongzhenguo/my_scala_code/tree/master/src/main/scala/scopt/PlatformReadInstances.scala)
+    - 3.1 [options.scala源码](https://github.com/Tongzhenguo/my_scala_code/tree/master/src/main/scala/scopt/options.scala)
+    - 3.2 [PlatformReadInstances.scala源码](https://github.com/Tongzhenguo/my_scala_code/tree/master/src/main/scala/scopt/PlatformReadInstances.scala)
+
+- 4.使用案例
+    - [OptionConfigUserCase](https://github.com/Tongzhenguo/my_scala_code/tree/master/src/main/scala/scopt/OptionConfigUserCase.scala)
 
 
 
