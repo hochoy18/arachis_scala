@@ -16,7 +16,7 @@ object OptionConfigUserCase {
     val confJson = """{"a":1,"list":[1,2,3]}"""
     println(confJson)
     // {"a":1,"list":[1,2,3]}
-    val params = raw"--add;1;--printMsg;   a;--aggregate_conf;$confJson
+    val params = raw"--add;1;--printMsg;   a;--aggregate_conf;$confJson"
     run(params.split(";"))
   }
 
