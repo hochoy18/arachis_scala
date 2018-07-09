@@ -10,3 +10,4 @@
 - person.tzg.scala 自己实现的scala/spark程序
 - scopt 用来解析参数的scala包,相当于python中的ConfigParser
 - utils 各工具包
+- tf tensorflow相关

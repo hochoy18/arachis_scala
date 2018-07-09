@@ -28,6 +28,14 @@
 
   <dependencies>
 
+    <!--                  tf dependencies                             -->
+    <dependency>
+      <groupId>org.tensorflow</groupId>
+      <artifactId>tensorflow-hadoop</artifactId>
+      <version>1.0-SNAPSHOT</version>
+      <classifier>shaded-protobuf</classifier>
+    </dependency>
+
     <!--                  scopt                  -->
       <dependency>
           <groupId>com.github.scopt</groupId>
